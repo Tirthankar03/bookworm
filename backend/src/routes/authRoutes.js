@@ -1,0 +1,77 @@
+import express from "express";
+import User from "../models/User.js";
+import { generateToken } from "../utils/token.js";
+const router = express.Router();
+
+router.post("/register", async (req, res) => {
+  const { username, email, password } = req.body;
+  try {
+    if (!username || !email || !password) {
+      return res.status(400).json({ message: "All fields are required" });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ message: "Password must be at least 6 characters long" });
+    }
+
+    if(username.length < 3) {
+      return res.status(400).json({ message: "Username must be at least 3 characters long" });
+    }
+
+    const existingUser = await User.findOne({ $or: [{ username }, { email }] });
+    if (existingUser) {
+      return res.status(400).json({ message: "User already exists" });
+    }
+
+    const profileImage = `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`;
+
+    const user = await User.create({ username, email, password, profileImage });
+    await user.save();
+    const token = generateToken(user._id);
+    res.status(201).json({  token, user: {
+      _id: user._id,
+      username: user.username,
+      email: user.email,
+      profileImage: user.profileImage,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    } });
+  } catch (error) {
+    console.log("error in register route", error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+router.post("/login", async (req, res) => {
+  const { email, password } = req.body;
+  try {
+    if (!email || !password) {
+      return res.status(400).json({ message: "All fields are required" });
+    }
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(401).json({ message: "Invalid email or password" });
+    }
+
+    const isMatch = await user.comparePassword(password);
+    if (!isMatch) {
+      return res.status(401).json({ message: "Invalid email or password" });
+    }
+
+    const token = generateToken(user._id);
+    res.status(200).json({ token, user: {
+      _id: user._id,
+      username: user.username,
+      email: user.email,
+      profileImage: user.profileImage,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    } });
+  } catch (error) {
+    console.log("error in login route", error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+export default router;
